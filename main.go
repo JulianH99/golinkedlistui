@@ -2,10 +2,31 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
+
+func addTaskToList(list *tview.List, app *tview.Application, detailPlaceholder *tview.TextView, t task) {
+
+	list.AddItem(t.title, t.content, 0, func() {
+		detail := buildDetail(t)
+		detailPlaceholder.SetText(detail)
+		app.SetFocus(detailPlaceholder)
+	})
+	list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Rune() {
+		case 'd':
+			currentTask := list.GetCurrentItem()
+			list.RemoveItem(currentTask)
+		}
+
+		return event
+
+	})
+
+}
 
 func main() {
 	fmt.Println("Menu:")
@@ -14,6 +35,8 @@ func main() {
 	list := tview.NewList()
 	grid := tview.NewGrid()
 	detail_placeholder := tview.NewTextView().SetDynamicColors(true).SetText("[red]select a task[white]")
+	detail_placeholder.SetScrollable(false)
+	formShown := false
 
 	detail_placeholder.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
@@ -25,20 +48,6 @@ func main() {
 	})
 
 	pages := tview.NewPages()
-
-	task1 := task{title: "title", content: "content", id: '1'}
-
-	list.AddItem(task1.title, task1.content, 0, func() {
-		detail := buildDetail(task1)
-		detail_placeholder.SetText(detail)
-		app.SetFocus(detail_placeholder)
-	})
-	list.AddItem("This is a list", "With description", 0, nil)
-	list.AddItem("This is a list", "With description", 0, nil)
-	list.AddItem("This is a list", "With description", 0, nil)
-	list.AddItem("This is a list", "With description", 0, nil)
-	list.AddItem("This is a list", "With description", 0, nil)
-	list.AddItem("This is a list", "With description", 0, nil)
 
 	grid.SetRows(0).
 		SetColumns(50, 0).
@@ -56,6 +65,30 @@ func main() {
 
 	app.SetRoot(pages, true)
 
+	onSave := func(f *tview.Form) func() {
+		return func() {
+			title := f.GetFormItemByLabel("Title").(*tview.InputField).GetText()
+			description := f.GetFormItemByLabel("Description").(*tview.TextArea).GetText()
+
+			task := task{title: title, content: description, id: rand.Intn(100)}
+			addTaskToList(list, app, detail_placeholder, task)
+			pages.RemovePage("modal")
+			formShown = false
+
+			// restore focus
+			f.SetFocus(0)
+			f.GetFormItemByLabel("Title").(*tview.InputField).SetText("")
+			f.GetFormItemByLabel("Description").(*tview.TextArea).SetText("", false)
+		}
+	}
+
+	onCancel := func() {
+		pages.RemovePage("modal")
+		formShown = false
+	}
+
+	form := buildForm(onSave, onCancel)
+
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 
 		if event.Key() == tcell.KeyRune {
@@ -64,14 +97,12 @@ func main() {
 				app.Stop()
 			case 'n':
 				// show modal
-				form := buildForm(func() {
-					pages.RemovePage("modal")
-				}, func() {
-					pages.RemovePage("modal")
-				})
-				modal := buildModal(form)
-				pages.AddPage("modal", modal, true, true)
-
+				if !formShown {
+					modal := buildModal(form)
+					pages.AddPage("modal", modal, true, true)
+					form.GetFormItemByLabel("Title").(*tview.InputField).SetText("")
+					formShown = true
+				}
 			}
 		}
 
@@ -100,14 +131,13 @@ func buildModal(content tview.Primitive) tview.Primitive {
 
 }
 
-func buildForm(onSave, onCancel func()) *tview.Form {
+func buildForm(onSave func(f *tview.Form) func(), onCancel func()) *tview.Form {
 	form := tview.NewForm().
 		AddInputField("Title", "", 40, nil, nil).
-		AddTextArea("Description", "", 40, 10, 300, nil).
-		AddButton("Save", onSave).
+		AddTextArea("Description", "", 40, 10, 300, nil)
+	form.AddButton("Save", onSave(form)).
 		AddButton("Quit", onCancel).
 		SetButtonsAlign(tview.AlignCenter)
-
 	form.SetTitle("New task").SetBorder(true).SetTitleAlign(tview.AlignCenter)
 
 	return form
