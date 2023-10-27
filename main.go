@@ -16,10 +16,12 @@ func addTaskToList(list *tview.List, app *tview.Application, detailPlaceholder *
 		app.SetFocus(detailPlaceholder)
 	})
 	list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		currentTask := list.GetCurrentItem()
 		switch event.Rune() {
 		case 'd':
-			currentTask := list.GetCurrentItem()
 			list.RemoveItem(currentTask)
+		case 'c':
+			list.SetItemText(currentTask, "Completed:[yellow]"+t.title+"[white]", t.content)
 		}
 
 		return event
@@ -34,7 +36,7 @@ func main() {
 	app := tview.NewApplication()
 	list := tview.NewList()
 	grid := tview.NewGrid()
-	detail_placeholder := tview.NewTextView().SetDynamicColors(true).SetText("[red]select a task[white]")
+	detail_placeholder := tview.NewTextView().SetDynamicColors(true).SetText("[blue]select a task[white]")
 	detail_placeholder.SetScrollable(false)
 	formShown := false
 
@@ -47,9 +49,15 @@ func main() {
 		return event
 	})
 
+	// commad legend
+	commantsContainer := tview.NewFlex().
+		AddItem(tview.NewTextView().SetText("(n) New task"), 0, 1, false).
+		AddItem(tview.NewTextView().SetText("(c) Mark as complete"), 0, 1, false).
+		AddItem(tview.NewTextView().SetText("(d) Delete task"), 0, 1, false)
+
 	pages := tview.NewPages()
 
-	grid.SetRows(0).
+	grid.SetRows(0, 1).
 		SetColumns(50, 0).
 		SetBorders(true)
 
@@ -57,6 +65,7 @@ func main() {
 
 	grid.AddItem(list, 0, 0, 1, 1, 0, 0, true)
 	grid.AddItem(detail_placeholder, 0, 1, 1, 1, 0, 0, false)
+	grid.AddItem(commantsContainer, 1, 0, 1, 2, 0, 0, false)
 
 	frame := tview.NewFrame(grid)
 	frame.AddText("Task list", true, tview.AlignCenter, tcell.ColorGreen)
@@ -139,6 +148,14 @@ func buildForm(onSave func(f *tview.Form) func(), onCancel func()) *tview.Form {
 		AddButton("Quit", onCancel).
 		SetButtonsAlign(tview.AlignCenter)
 	form.SetTitle("New task").SetBorder(true).SetTitleAlign(tview.AlignCenter)
+
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEsc:
+			onCancel()
+		}
+		return event
+	})
 
 	return form
 
