@@ -2,13 +2,36 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
-func addTaskToList(list *tview.List, app *tview.Application, detailPlaceholder *tview.TextView, t task) {
+type Shortcut rune
+
+const (
+	ShortcutAdd      Shortcut = 'n'
+	ShortcutDelete            = 'd'
+	ShortcutComplete          = 'c'
+	ShortcutQuit              = 'q'
+)
+
+func shortcutToText(shortcut Shortcut) string {
+	switch shortcut {
+	case ShortcutAdd:
+		return fmt.Sprintf("(%c) New task", ShortcutAdd)
+
+	case ShortcutDelete:
+		return fmt.Sprintf("(%c) Mark as complete", ShortcutDelete)
+
+	case ShortcutComplete:
+		return fmt.Sprintf("(%c) Delete task", ShortcutComplete)
+
+	}
+	return ""
+}
+
+func addTaskToList(list *tview.List, app *tview.Application, detailPlaceholder *tview.TextView, t *Task) {
 
 	list.AddItem(t.title, t.content, 0, func() {
 		detail := buildDetail(t)
@@ -30,17 +53,10 @@ func addTaskToList(list *tview.List, app *tview.Application, detailPlaceholder *
 
 }
 
-func main() {
-	fmt.Println("Menu:")
-
-	app := tview.NewApplication()
-	list := tview.NewList()
-	grid := tview.NewGrid()
-	detail_placeholder := tview.NewTextView().SetDynamicColors(true).SetText("[blue]select a task[white]")
-	detail_placeholder.SetScrollable(false)
-	formShown := false
-
-	detail_placeholder.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+func createDetailPlaceholder(app *tview.Application, list *tview.List) *tview.TextView {
+	detailPlaceholder := tview.NewTextView().SetDynamicColors(true).SetText("[blue]select a task[white]")
+	detailPlaceholder.SetScrollable(false)
+	detailPlaceholder.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyEsc:
 			app.SetFocus(list)
@@ -49,14 +65,22 @@ func main() {
 		return event
 	})
 
-	// commad legend
-	commantsContainer := tview.NewFlex().
-		AddItem(tview.NewTextView().SetText("(n) New task"), 0, 1, false).
-		AddItem(tview.NewTextView().SetText("(c) Mark as complete"), 0, 1, false).
-		AddItem(tview.NewTextView().SetText("(d) Delete task"), 0, 1, false)
+	return detailPlaceholder
+}
 
-	pages := tview.NewPages()
+func createCommandsContainer() *tview.Flex {
 
+	commandsContainer := tview.NewFlex().
+		AddItem(tview.NewTextView().SetText(shortcutToText(ShortcutAdd)), 0, 1, false).
+		AddItem(tview.NewTextView().SetText(shortcutToText(ShortcutComplete)), 0, 1, false).
+		AddItem(tview.NewTextView().SetText(shortcutToText(ShortcutDelete)), 0, 1, false)
+
+	return commandsContainer
+}
+
+func createGrid(list *tview.List, detailPlaceholder *tview.TextView, commandsContainer *tview.Flex) *tview.Grid {
+
+	grid := tview.NewGrid()
 	grid.SetRows(0, 1).
 		SetColumns(50, 0).
 		SetBorders(true)
@@ -64,8 +88,21 @@ func main() {
 	grid.SetGap(0, 1)
 
 	grid.AddItem(list, 0, 0, 1, 1, 0, 0, true)
-	grid.AddItem(detail_placeholder, 0, 1, 1, 1, 0, 0, false)
-	grid.AddItem(commantsContainer, 1, 0, 1, 2, 0, 0, false)
+	grid.AddItem(detailPlaceholder, 0, 1, 1, 1, 0, 0, false)
+	grid.AddItem(commandsContainer, 1, 0, 1, 2, 0, 0, false)
+
+	return grid
+}
+
+func main() {
+	app := tview.NewApplication()
+	list := tview.NewList()
+	detailPlaceholder := createDetailPlaceholder(app, list)
+	commandsContainer := createCommandsContainer()
+	grid := createGrid(list, detailPlaceholder, commandsContainer)
+	formShown := false
+
+	pages := tview.NewPages()
 
 	frame := tview.NewFrame(grid)
 	frame.AddText("Task list", true, tview.AlignCenter, tcell.ColorGreen)
@@ -77,10 +114,10 @@ func main() {
 	onSave := func(f *tview.Form) func() {
 		return func() {
 			title := f.GetFormItemByLabel("Title").(*tview.InputField).GetText()
-			description := f.GetFormItemByLabel("Description").(*tview.TextArea).GetText()
+			content := f.GetFormItemByLabel("Description").(*tview.TextArea).GetText()
 
-			task := task{title: title, content: description, id: rand.Intn(100)}
-			addTaskToList(list, app, detail_placeholder, task)
+			task := createTask(title, content)
+			addTaskToList(list, app, detailPlaceholder, task)
 			pages.RemovePage("modal")
 			formShown = false
 
@@ -102,9 +139,9 @@ func main() {
 
 		if event.Key() == tcell.KeyRune {
 			switch event.Rune() {
-			case 'q':
+			case ShortcutDelete:
 				app.Stop()
-			case 'n':
+			case ShortcutAdd:
 				// show modal
 				if !formShown {
 					modal := buildModal(form)
@@ -161,7 +198,7 @@ func buildForm(onSave func(f *tview.Form) func(), onCancel func()) *tview.Form {
 
 }
 
-func buildDetail(task task) string {
+func buildDetail(task *Task) string {
 	content := fmt.Sprintf("[green]%s[white]\n%s", task.title, task.content)
 
 	return content
