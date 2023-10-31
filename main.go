@@ -139,9 +139,9 @@ func main() {
 
 		if event.Key() == tcell.KeyRune {
 			switch event.Rune() {
-			case ShortcutDelete:
+			case rune(ShortcutQuit):
 				app.Stop()
-			case ShortcutAdd:
+			case rune(ShortcutAdd):
 				// show modal
 				if !formShown {
 					modal := buildModal(form)
